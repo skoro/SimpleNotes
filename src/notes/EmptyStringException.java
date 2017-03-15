@@ -1,6 +1,7 @@
 package notes;
 
 /**
+ * Empty string exception.
  *
  * @author skoro
  */
