@@ -2,6 +2,7 @@ package notes;
 
 import java.util.Vector;
 import javax.microedition.lcdui.Alert;
+import javax.microedition.lcdui.AlertType;
 import javax.microedition.lcdui.Command;
 import javax.microedition.lcdui.CommandListener;
 import javax.microedition.lcdui.Display;
@@ -150,13 +151,27 @@ public class SimpleNotes extends MIDlet implements CommandListener {
             }
         }
         else if (displayable == editForm) {
+            Alert alert = null; // Confirm dialog.
             if (command == editForm.getOkCommand()) {
                 setNote(editForm.getString(), mainForm.getSelectedIndex());
             }
             else if (command == editForm.getAddCommand()) {
                 addNote(editForm.getString());
             }
-            switchDisplayable(null, mainForm);
+            else if (command == editForm.getDeleteCommand()) {
+                Confirm confirm = new Confirm("Delete note", "Are you sure to delete note ?");
+                confirm.setConfirmedListener(new Confirm.ConfirmedListener() {
+                    public void confirmedAction(Confirm c) {
+                        if (c.isConfirmed()) {
+                            deleteNote(mainForm.getSelectedIndex());
+                        }
+                        // Return to main form after any confirm action.
+                        switchDisplayable(null, mainForm);
+                    }
+                });
+                alert = confirm.getAlert();
+            }
+            switchDisplayable(alert, mainForm);
             editForm = null;
         }
     }
@@ -196,6 +211,18 @@ public class SimpleNotes extends MIDlet implements CommandListener {
             note.setText(text);
             note.setTitle("");
             mainForm.set(index, note.getTitle(), null);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+    
+    public void deleteNote(int index) {
+        if (index == -1) {
+            return;
+        }
+        try {
+            list.removeElementAt(index);
+            mainForm.delete(index);
         } catch (Exception e) {
             e.printStackTrace();
         }
