@@ -146,6 +146,25 @@ public class SimpleNotes extends MIDlet implements CommandListener {
                 editForm = EditForm.createNew("Add note", this);
                 switchDisplayable(null, editForm);
             }
+            else if (command == clearCommand) {
+                Alert alert = null;
+                if (mainForm.size() == 0) {
+                    alert = new Alert("No notes", "There are no notes.", null, AlertType.WARNING);
+                } else {
+                    Confirm confirm = new Confirm("Clear all notes", "Are you sure to clear ALL notes ?");
+                    confirm.setConfirmedListener(new Confirm.ConfirmedListener() {
+                        public void confirmedAction(Confirm c) {
+                            if (c.isConfirmed()) {
+                                clearNotes();
+                            }
+                            // Return to main form after any action.
+                            switchDisplayable(null, mainForm);
+                        }
+                    });
+                    alert = confirm.getAlert();
+                }
+                switchDisplayable(alert, mainForm);
+            }
             else if (command == List.SELECT_COMMAND) {
                 editNote(mainForm.getSelectedIndex());
             }
@@ -165,7 +184,7 @@ public class SimpleNotes extends MIDlet implements CommandListener {
                         if (c.isConfirmed()) {
                             deleteNote(mainForm.getSelectedIndex());
                         }
-                        // Return to main form after any confirm action.
+                        // Return to main form after any action.
                         switchDisplayable(null, mainForm);
                     }
                 });
@@ -223,6 +242,15 @@ public class SimpleNotes extends MIDlet implements CommandListener {
         try {
             list.removeElementAt(index);
             mainForm.delete(index);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+    
+    public void clearNotes() {
+        try {
+            list.removeAllElements();
+            mainForm.deleteAll();
         } catch (Exception e) {
             e.printStackTrace();
         }
