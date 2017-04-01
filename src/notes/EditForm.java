@@ -15,7 +15,7 @@ public class EditForm extends TextBox {
     public final static int MODE_NEW = 1;
     public final static int MODE_EDIT = 2;
     
-    public final static int TEXT_LENGTH = 255;
+    public final static int TEXT_LENGTH = 1000;
     
     private int mode;
     
