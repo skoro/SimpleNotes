@@ -11,6 +11,8 @@ import javax.microedition.lcdui.List;
 import javax.microedition.midlet.*;
 
 /**
+ * SimpleNotes midlet application.
+ *
  * @author skoro
  */
 public class SimpleNotes extends MIDlet implements CommandListener {
