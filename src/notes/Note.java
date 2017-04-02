@@ -5,7 +5,7 @@ package notes;
  *
  * @author skoro
  */
-public class Note {
+public class Note extends Model {
     
     public static final int TITLE_MAX = 25;
   
@@ -69,5 +69,14 @@ public class Note {
     
     protected boolean isEmpty(String s) {
         return s.trim().length() == 0;
+    }
+    
+    public byte[] toBytes() {
+        return text.getBytes();
+    }
+    
+    public static Model createFromBytes(byte[] buf) throws EmptyStringException {
+        String text = new String(buf);
+        return new Note(text);
     }
 }

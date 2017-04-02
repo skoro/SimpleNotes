@@ -1,5 +1,7 @@
 package notes;
 
+import java.io.IOException;
+import java.util.Enumeration;
 import java.util.Vector;
 import javax.microedition.lcdui.Alert;
 import javax.microedition.lcdui.AlertType;
@@ -9,6 +11,10 @@ import javax.microedition.lcdui.Display;
 import javax.microedition.lcdui.Displayable;
 import javax.microedition.lcdui.List;
 import javax.microedition.midlet.*;
+import javax.microedition.rms.RecordEnumeration;
+import javax.microedition.rms.RecordStore;
+import javax.microedition.rms.RecordStoreException;
+import javax.microedition.rms.RecordStoreNotOpenException;
 
 /**
  * SimpleNotes midlet application.
@@ -17,8 +23,13 @@ import javax.microedition.midlet.*;
  */
 public class SimpleNotes extends MIDlet implements CommandListener {
 
+    private final String RECORD_STORE_NAME = "SimpleNotes";
+    
     private boolean midletPaused = false;
     
+    /**
+     * Notes container.
+     */
     private Vector list;
     
     /**
@@ -29,6 +40,8 @@ public class SimpleNotes extends MIDlet implements CommandListener {
     private Command newNoteCommand;
     private Command clearCommand;
     private EditForm editForm;
+    
+    private RecordStore recordStore;
     
     public SimpleNotes() {
         super();
@@ -43,7 +56,14 @@ public class SimpleNotes extends MIDlet implements CommandListener {
         if (midletPaused) {
             // TODO: resume midlet.
         } else {
-            switchDisplayable(null, getMainForm());
+            try {
+                openRecordStore();
+                readNotesFromRecordStore();
+                switchDisplayable(null, getMainForm());
+            } catch (Exception e) {
+                e.printStackTrace();
+                getDisplay().setCurrent(new Alert("Error", e.getMessage(), null, AlertType.ERROR));
+            }
         }
         midletPaused = false;
     }
@@ -58,7 +78,8 @@ public class SimpleNotes extends MIDlet implements CommandListener {
     /**
      * Exits MIDlet.
      */
-    public void exitMIDlet() {
+    public void exitMIDlet() throws RecordStoreException {
+        recordStore.closeRecordStore();
         switchDisplayable(null, null);
         destroyApp(true);
         notifyDestroyed();
@@ -140,24 +161,52 @@ public class SimpleNotes extends MIDlet implements CommandListener {
      * @param displayable the Displayable where the command was invoked
      */
     public void commandAction(Command command, Displayable displayable) {
-        if (displayable == mainForm) {
-            if (command == exitCommand) {
-                exitMIDlet();
+        try {
+            if (displayable == mainForm) {
+                if (command == exitCommand) {
+                    exitMIDlet();
+                }
+                else if (command == newNoteCommand) {
+                    editForm = EditForm.createNew("Add note", this);
+                    switchDisplayable(null, editForm);
+                }
+                else if (command == clearCommand) {
+                    Alert alert = null;
+                    if (mainForm.size() == 0) {
+                        alert = new Alert("No notes", "There are no notes.", null, AlertType.WARNING);
+                    } else {
+                        Confirm confirm = new Confirm("Clear all notes", "Are you sure to clear ALL notes ?");
+                        confirm.setConfirmedListener(new Confirm.ConfirmedListener() {
+                            public void confirmedAction(Confirm c) {
+                                if (c.isConfirmed()) {
+                                    clearNotes();
+                                }
+                                // Return to main form after any action.
+                                switchDisplayable(null, mainForm);
+                            }
+                        });
+                        alert = confirm.getAlert();
+                    }
+                    switchDisplayable(alert, mainForm);
+                }
+                else if (command == List.SELECT_COMMAND) {
+                    editNote(mainForm.getSelectedIndex());
+                }
             }
-            else if (command == newNoteCommand) {
-                editForm = EditForm.createNew("Add note", this);
-                switchDisplayable(null, editForm);
-            }
-            else if (command == clearCommand) {
-                Alert alert = null;
-                if (mainForm.size() == 0) {
-                    alert = new Alert("No notes", "There are no notes.", null, AlertType.WARNING);
-                } else {
-                    Confirm confirm = new Confirm("Clear all notes", "Are you sure to clear ALL notes ?");
+            else if (displayable == editForm) {
+                Alert alert = null; // Confirm dialog.
+                if (command == editForm.getOkCommand()) {
+                    setNote(editForm.getString(), mainForm.getSelectedIndex());
+                }
+                else if (command == editForm.getAddCommand()) {
+                    addNote(editForm.getString());
+                }
+                else if (command == editForm.getDeleteCommand()) {
+                    Confirm confirm = new Confirm("Delete note", "Are you sure to delete note ?");
                     confirm.setConfirmedListener(new Confirm.ConfirmedListener() {
                         public void confirmedAction(Confirm c) {
                             if (c.isConfirmed()) {
-                                clearNotes();
+                                deleteNote(mainForm.getSelectedIndex());
                             }
                             // Return to main form after any action.
                             switchDisplayable(null, mainForm);
@@ -166,48 +215,20 @@ public class SimpleNotes extends MIDlet implements CommandListener {
                     alert = confirm.getAlert();
                 }
                 switchDisplayable(alert, mainForm);
+                editForm = null;
             }
-            else if (command == List.SELECT_COMMAND) {
-                editNote(mainForm.getSelectedIndex());
-            }
-        }
-        else if (displayable == editForm) {
-            Alert alert = null; // Confirm dialog.
-            if (command == editForm.getOkCommand()) {
-                setNote(editForm.getString(), mainForm.getSelectedIndex());
-            }
-            else if (command == editForm.getAddCommand()) {
-                addNote(editForm.getString());
-            }
-            else if (command == editForm.getDeleteCommand()) {
-                Confirm confirm = new Confirm("Delete note", "Are you sure to delete note ?");
-                confirm.setConfirmedListener(new Confirm.ConfirmedListener() {
-                    public void confirmedAction(Confirm c) {
-                        if (c.isConfirmed()) {
-                            deleteNote(mainForm.getSelectedIndex());
-                        }
-                        // Return to main form after any action.
-                        switchDisplayable(null, mainForm);
-                    }
-                });
-                alert = confirm.getAlert();
-            }
-            switchDisplayable(alert, mainForm);
-            editForm = null;
+        } catch (Exception e) {
+            e.printStackTrace();
+            switchDisplayable(new Alert("Error", e.getMessage(), null, AlertType.ERROR), mainForm);
         }
     }
     
-    public Note addNote(String text) {
+    public Model addNote(String text) throws RecordStoreException, EmptyStringException {
         Note note = null;
-        try {
-            note = new Note(text);
-            list.addElement(note);
-            mainForm.append(note.getTitle(), null);
-        } catch (EmptyStringException e) {
-            // TODO: alert ?
-            e.printStackTrace();
-        }
-        return note;
+        note = new Note(text);
+        list.addElement(note);
+        mainForm.append(note.getTitle(), null);
+        return recordInsert(note);
     }
     
     public void editNote(int index) {
@@ -232,6 +253,7 @@ public class SimpleNotes extends MIDlet implements CommandListener {
             note.setText(text);
             note.setTitle("");
             mainForm.set(index, note.getTitle(), null);
+            recordUpdate(note);
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -242,8 +264,10 @@ public class SimpleNotes extends MIDlet implements CommandListener {
             return;
         }
         try {
+            Note note = (Note) list.elementAt(index);
             list.removeElementAt(index);
             mainForm.delete(index);
+            recordDelete(note);
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -251,10 +275,63 @@ public class SimpleNotes extends MIDlet implements CommandListener {
     
     public void clearNotes() {
         try {
+            Enumeration e = list.elements();
+            while (e.hasMoreElements()) {
+                Model m = (Model) e.nextElement();
+                if (!m.isNew()) {
+                    recordStore.deleteRecord(m.getId());
+                }
+            }
             list.removeAllElements();
             mainForm.deleteAll();
         } catch (Exception e) {
             e.printStackTrace();
         }
+    }
+    
+    protected void openRecordStore() throws RecordStoreException {
+        if (recordStore != null) {
+            return; // Already initialized.
+        }
+        recordStore = RecordStore.openRecordStore(RECORD_STORE_NAME, true);
+    }
+    
+    protected Model recordInsert(Model model) throws RecordStoreException {
+        byte[] data = model.toBytes();
+        model.setId(recordStore.addRecord(data, 0, data.length));
+        return model;
+    }
+    
+    protected void recordUpdate(Model model) throws RecordStoreException {
+        if (model.isNew()) {
+            return;
+        }
+        byte[] data = model.toBytes();
+        recordStore.setRecord(model.getId(), data, 0, data.length);
+    }
+
+    private void readNotesFromRecordStore() throws RecordStoreNotOpenException, RecordStoreException {
+        List form = getMainForm();
+        RecordEnumeration re = recordStore.enumerateRecords(null, null, false);
+        if (re.numRecords() > 0) {
+            while (re.hasNextElement()) {
+                int id = re.nextRecordId();
+                try {
+                    Note note = (Note) Note.createFromBytes(recordStore.getRecord(id));
+                    note.setId(id);
+                    list.addElement(note);
+                    form.append(note.getTitle(), null);
+                } catch (EmptyStringException e) {
+                    // TODO: delete such records ?
+                }
+            }
+        }
+    }
+
+    protected void recordDelete(Model model) throws RecordStoreException {
+        if (model.isNew()) {
+            return;
+        }
+        recordStore.deleteRecord(model.getId());
     }
 }
