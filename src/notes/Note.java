@@ -1,5 +1,9 @@
 package notes;
 
+import java.io.ByteArrayOutputStream;
+import java.io.DataOutputStream;
+import java.io.UnsupportedEncodingException;
+
 /**
  * Note item.
  *
@@ -72,11 +76,22 @@ public class Note extends Model {
     }
     
     public byte[] toBytes() {
-        return text.getBytes();
+        byte[] data;
+        try {
+            data = text.getBytes("UTF-8");
+        } catch (UnsupportedEncodingException e) {
+            data = text.getBytes();
+        }
+        return data;
     }
     
     public static Model createFromBytes(byte[] buf) throws EmptyStringException {
-        String text = new String(buf);
+        String text;
+        try {
+            text = new String(buf, "UTF-8");
+        } catch (UnsupportedEncodingException e) {
+            text = new String(buf);
+        }
         return new Note(text);
     }
 }
